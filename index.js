@@ -1,30 +1,52 @@
 const express = require("express");
+const bodyParser = require("body-parser");
 const TelegramBot = require("node-telegram-bot-api");
-require("dotenv").config();
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: false });
 const app = express();
+app.use(bodyParser.json());
 
-app.use(express.json());
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const CHAT_ID = process.env.CHAT_ID;
 
-app.post("/webhook", async (req, res) => {
-    console.log("🔔 Webhook received:", req.body);
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
 
-    const tokenAddress = req.body?.events?.[0]?.mint || "Unknown";
-    
-    await bot.sendMessage(
-        process.env.CHAT_ID,
-        `🚀 Token nou detectat!\n\nAddress: ${tokenAddress}`
-    );
-
-    res.sendStatus(200);
-});
-
+// ROOT
 app.get("/", (req, res) => {
-    res.send("Bot is running!");
+  res.send("Bot is running.");
 });
 
-const PORT = process.env.PORT || 10000;
+// WEBHOOK
+app.post("/webhook", async (req, res) => {
+  try {
+    console.log("Webhook received:", JSON.stringify(req.body, null, 2));
+
+    const events = req.body;
+    if (!events?.[0]) return res.sendStatus(200);
+
+    const event = events[0];
+    if (event.type !== "TOKEN_MINT") return res.sendStatus(200);
+
+    const mint = event?.data?.mint;
+    const name = event?.data?.name || "Unknown";
+    const symbol = event?.data?.symbol || "???";
+
+    const msg = `
+🚀 NEW TOKEN MINTED  
+Name: ${name}  
+Symbol: ${symbol}  
+Mint: ${mint}
+    `;
+
+    await bot.sendMessage(CHAT_ID, msg.trim());
+    res.sendStatus(200);
+
+  } catch (error) {
+    console.log("Error:", error);
+    res.sendStatus(500);
+  }
+});
+
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
+  console.log("Server running on port", PORT);
 });
