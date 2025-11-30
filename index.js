@@ -1,52 +1,51 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const TelegramBot = require("node-telegram-bot-api");
+import express from "express";
+import dotenv from "dotenv";
+import TelegramBot from "node-telegram-bot-api";
+
+dotenv.config();
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+// Telegram bot
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: false });
 const CHAT_ID = process.env.CHAT_ID;
 
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
-
-// ROOT
-app.get("/", (req, res) => {
-  res.send("Bot is running.");
-});
-
-// WEBHOOK
+// Helius webhook endpoint
 app.post("/webhook", async (req, res) => {
+  console.log("💥 Webhook received:", req.body);
+
   try {
-    console.log("Webhook received:", JSON.stringify(req.body, null, 2));
-
     const events = req.body;
-    if (!events?.[0]) return res.sendStatus(200);
 
-    const event = events[0];
-    if (event.type !== "TOKEN_MINT") return res.sendStatus(200);
+    if (!events || events.length === 0) {
+      return res.status(200).send("No events");
+    }
 
-    const mint = event?.data?.mint;
-    const name = event?.data?.name || "Unknown";
-    const symbol = event?.data?.symbol || "???";
+    // Loop through all enhanced events
+    for (const event of events) {
+      if (event.type === "TOKEN2022_MINT" || event.type === "TOKEN_MINT") {
+        const tokenMint = event?.tokenTransfers?.[0]?.mint;
 
-    const msg = `
-🚀 NEW TOKEN MINTED  
-Name: ${name}  
-Symbol: ${symbol}  
-Mint: ${mint}
-    `;
+        if (!tokenMint) continue;
 
-    await bot.sendMessage(CHAT_ID, msg.trim());
-    res.sendStatus(200);
+        const msg = `
+🚀 NEW TOKEN DETECTED!
+Mint: <code>${tokenMint}</code>
+Program: ${event.program}
+        `;
 
-  } catch (error) {
-    console.log("Error:", error);
-    res.sendStatus(500);
+        await bot.sendMessage(CHAT_ID, msg, { parse_mode: "HTML" });
+      }
+    }
+
+    res.status(200).send("OK");
+  } catch (err) {
+    console.error("ERROR in webhook:", err);
+    res.status(500).send("ERR");
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
-});
+// Render port handling
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
