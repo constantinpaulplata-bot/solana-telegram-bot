@@ -1,28 +1,52 @@
-require("dotenv").config();
-const TelegramBot = require("node-telegram-bot-api");
+import TelegramBot from "node-telegram-bot-api";
+import express from "express";
+import bodyParser from "body-parser";
+import dotenv from "dotenv";
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
+dotenv.config();
 
-console.log("Bot ONLINE! 🔥");
+// ---------------------------
+// 1. Telegram Bot
+// ---------------------------
 
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Botul funcționează! 🚀");
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, {
+  polling: false, // nu folosim polling pe Render
 });
 
-function sendTestAlert() {
-  const chatId = process.env.CHAT_ID;
+// ---------------------------
+// 2. Express Server (pentru Helius Webhook)
+// ---------------------------
 
-  const message = `
-🚀 *TEST ALERT*  
-Moneda exemplu detectată!  
-MC: $1,200  
-Momentum: 83  
-Safety: 71  
-Organic: 50  
-Rating: SAFU 🟢
-`;
+const app = express();
+app.use(bodyParser.json());
 
-  bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
-}
+// Endpoint unde Helius trimite evenimentele
+app.post("/webhook", async (req, res) => {
+  const body = req.body;
 
-setInterval(sendTestAlert, 15000);
+  // Trimitem tot ce vine, fără filtre
+  bot.sendMessage(
+    process.env.CHAT_ID,
+    `🚀 *New Activity Detected!*\n\n\`\`\`json\n${JSON.stringify(body, null, 2)}\n\`\`\``,
+    { parse_mode: "Markdown" }
+  );
+
+  res.sendStatus(200);
+});
+
+// ---------------------------
+// 3. Pornim serverul pe Render
+// ---------------------------
+
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () => {
+  console.log(`Helius listener active on port ${PORT}`);
+  console.log("Bot ONLINE! 🔥");
+});
+
+// ---------------------------
+// 4. Mesaj de confirmare la pornire
+// ---------------------------
+
+bot.sendMessage(process.env.CHAT_ID, "Botul este LIVE pe Render! 🚀");
